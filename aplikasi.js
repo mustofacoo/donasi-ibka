@@ -82,7 +82,7 @@ gallery.innerHTML += `
             
             <!-- Admin Buttons -->
             <div class="flex gap-1 ${!isAdmin ? 'hidden' : ''}">
-                <button onclick='editMode(${JSON.stringify(item).replace(/'/g, "\\'")})'
+                <button onclick="editMode(${item.id})"
                         class="bg-amber-50 text-amber-600 p-3 rounded-lg hover:bg-amber-100 border border-amber-200">
                     <i data-lucide="edit-3" class="w-4 h-4"></i>
                 </button>
@@ -135,7 +135,7 @@ gallery.innerHTML += `
 
                             <!-- Admin Buttons -->
                             <div class="flex gap-1 ${!isAdmin ? 'hidden' : ''}">
-                                <button onclick='editMode(${JSON.stringify(item).replace(/'/g, "\\'")})'
+                                <button onclick="editMode(${item.id})"
                                         class="flex-1 sm:flex-initial bg-amber-50 text-amber-600 p-2 rounded-lg hover:bg-amber-100 border border-amber-200">
                                     <i data-lucide="edit-3" class="w-4 h-4 mx-auto"></i>
                                 </button>
@@ -287,14 +287,13 @@ async function saveData() {
         btn.disabled = true;
         btn.innerText = "Memproses...";
 
-        // 🆕 CONDITIONAL: Reminder Kit tidak butuh gambar
+        // Logika upload gambar
         if (category === 'marketing') {
             if (fileInput) {
                 image_url = await uploadToStorage(fileInput);
             }
             if (!image_url) throw new Error("Marketing Kit harus memiliki gambar!");
         } else {
-            // Reminder Kit - set placeholder image
             image_url = image_url || 'https://placehold.co/600x400?text=Reminder+Kit';
         }
 
@@ -309,30 +308,44 @@ async function saveData() {
         };
         
         let res;
-        if (id) res = await supabaseClient.from('assets').update(payload).eq('id', id);
-        else res = await supabaseClient.from('assets').insert([payload]);
+        if (id) {
+            // PERBAIKAN: Konversi ID ke Number agar dikenali database
+            res = await supabaseClient.from('assets').update(payload).eq('id', Number(id));
+        } else {
+            res = await supabaseClient.from('assets').insert([payload]);
+        }
 
+        // Cek jika ada error dari Supabase
         if (res.error) throw res.error;
 
         alert("✅ Berhasil disimpan!");
         resetForm();
-        fetchAssets();
+        fetchAssets(); // Refresh tampilan gallery
     } catch (err) {
-        alert("❌ " + err.message);
+        console.error("Detail Error:", err);
+        alert("❌ Gagal menyimpan: " + (err.message || "Periksa koneksi/izin database"));
     } finally {
         btn.disabled = false;
         btn.innerText = "Simpan Konten";
     }
 }
 
-function editMode(item) {
+function editMode(itemId) {
+    // Cari data dari allAssets berdasarkan ID
+    const item = allAssets.find(asset => asset.id === itemId);
+    
+    if (!item) {
+        alert('❌ Data tidak ditemukan!');
+        return;
+    }
+    
     window.scrollTo({ top: 0, behavior: 'smooth' });
     document.getElementById('adminPanel').classList.remove('hidden');
     document.getElementById('formTitle').innerText = "Update Konten";
     document.getElementById('editId').value = item.id;
-    document.getElementById('imgUrl').value = item.image_url;
-    document.getElementById('captionText').value = item.caption;
-    document.getElementById('category').value = item.category;
+    document.getElementById('imgUrl').value = item.image_url || '';
+    document.getElementById('captionText').value = item.caption || '';
+    document.getElementById('category').value = item.category || 'marketing';
     document.getElementById('programTitle').value = item.program_title || '';
     document.getElementById('programDate').value = item.program_date || '';
     document.getElementById('btnCancel').classList.remove('hidden');
@@ -340,7 +353,7 @@ function editMode(item) {
     // Toggle image input based on category
     toggleImageInput();
     
-    if (item.category === 'marketing') {
+    if (item.category === 'marketing' && item.image_url) {
         previewUrl(item.image_url);
     }
 }
